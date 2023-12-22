@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Latent Painter</title>
+    <style>
+        body {
+            background-color: gainsboro;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #drawCanvas {
+            background-color: white;
+            box-shadow: 2px 2px 10px #999;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="drawCanvas" width="600" height="400"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+    <script>
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        const socket = io();
+
+        socket.on('image_updated', () => {
+            updateCanvas();
+        });
+
+        function updateCanvas() {
+            fetch('/get_image')
+                .then(response => response.blob())
+                .then(data => {
+                    const imageUrl = URL.createObjectURL(data);
+
+                    const img = new Image();
+                    img.onload = function() {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = imageUrl;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            socket.emit('update_strokes', { strokes: [{ x: e.offsetX, y: e.offsetY }] });
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (e.buttons === 1) {
+                socket.emit('update_strokes', { strokes: [{ x: e.offsetX, y: e.offsetY }] });
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            updateCanvas();
+        });
+
+        updateCanvas();
+    </script>
+</body>
+</html>

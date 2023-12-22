@@ -1,0 +1,11 @@
+jupyter
+diffusers
+transformers
+scipy
+ftfy
+accelerate
+mediapy
+gradio
+flask
+flask-socketio
+eventlet
