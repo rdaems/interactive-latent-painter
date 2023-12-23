@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler
+from skimage.draw import disk
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -16,7 +17,10 @@ class Painter:
         self.scheduler = DDIMScheduler.from_pretrained('CompVis/stable-diffusion-v1-4', subfolder='scheduler')
 
         self.latents = torch.randn((1, 4, 512 // 8, 512 // 8)).to(device)
+        self.stroke_map = torch.zeros((512 // 8, 512 // 8)).to(device)
+        self.patch_radius = 5
         self.scheduler.set_timesteps(30)
+        self.guidance_scale = 7.5
         self.latents = self.latents * self.scheduler.init_noise_sigma
 
     def encode_text(self, text):
@@ -38,5 +42,27 @@ class Painter:
         return image
 
     def paint(self, strokes):
+        patch = torch.zeros_like(self.stroke_map)
+        for stroke in strokes:
+            rr, cc = disk((stroke['x'], stroke['y']), self.patch_radius, shape=patch.shape)
+            patch[rr, cc] = 1
+
+        estimated_num_steps = self.stroke_map[patch == 1].mean()
+        estimated_num_steps = 0 if torch.isnan(estimated_num_steps) else int(estimated_num_steps)
+        estimated_num_steps = max(estimated_num_steps, len(self.scheduler.timesteps) - 1)
+        t = self.scheduler.timesteps[estimated_num_steps]
+
         latent_model_input = torch.cat([self.latents, self.latents])
-        
+        latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+        with torch.no_grad():
+            noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=self.text_embeddings).sample
+        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+        noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+
+        noise_pred = patch[None, None, :, :] * noise_pred
+        max_channel = torch.argmax(noise_pred.abs().sum(dim=(0, 2, 3)))
+        masked_noise_pred = torch.zeros_like(noise_pred)
+        masked_noise_pred[:, max_channel, :, :] = noise_pred[:, max_channel, :, :]
+
+        self.latents = self.scheduler.step(masked_noise_pred, t, self.latents).prev_sample
+        self.stroke_map += patch
