@@ -20,51 +20,35 @@
     </style>
 </head>
 <body>
-    <canvas id="drawCanvas" width="600" height="400"></canvas>
-
+    <canvas id="drawCanvas" width="512" height="512"></canvas>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
     <script>
         const canvas = document.getElementById('drawCanvas');
         const ctx = canvas.getContext('2d');
         const socket = io();
 
-        socket.on('image_updated', () => {
-            updateCanvas();
+        socket.on('image_updated', (data) => {
+            const img = new Image();
+            img.onload = function() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = 'data:image/png;base64,' + data;
         });
 
-        function updateCanvas() {
-            fetch('/get_image')
-                .then(response => response.blob())
-                .then(data => {
-                    const imageUrl = URL.createObjectURL(data);
-
-                    const img = new Image();
-                    img.onload = function() {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0);
-                    };
-                    img.src = imageUrl;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-        }
-
         canvas.addEventListener('mousedown', (e) => {
-            socket.emit('update_strokes', { strokes: [{ x: e.offsetX, y: e.offsetY }] });
+            socket.emit('update_strokes', { x: e.offsetX, y: e.offsetY });
         });
 
         canvas.addEventListener('mousemove', (e) => {
             if (e.buttons === 1) {
-                socket.emit('update_strokes', { strokes: [{ x: e.offsetX, y: e.offsetY }] });
+                socket.emit('update_strokes', { x: e.offsetX, y: e.offsetY });
             }
         });
 
         canvas.addEventListener('mouseup', () => {
-            updateCanvas();
+            // emit a stroke as well here?
         });
-
-        updateCanvas();
     </script>
 </body>
 </html>

@@ -1,9 +1,9 @@
 jupyter
-diffusers
-transformers
+# diffusers
+# transformers
 scipy
-ftfy
-accelerate
+# ftfy
+# accelerate
 mediapy
 gradio
 flask
