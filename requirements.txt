@@ -1,11 +1,12 @@
 jupyter
-# diffusers
-# transformers
+diffusers
+transformers
 scipy
-# ftfy
-# accelerate
-mediapy
-gradio
+ftfy
+accelerate
+torchvision
+# mediapy
+# gradio
 flask
 flask-socketio
 eventlet
