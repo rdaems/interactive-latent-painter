@@ -11,6 +11,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class Painter:
     def __init__(self):
+        # use self.pipeline.vae_scale_factor!
         self.pipeline = DiffusionPipeline.from_pretrained('runwayml/stable-diffusion-v1-5', torch_dtype=torch.float16, use_safetensors=True).to('cuda')
         self.vae = self.pipeline.vae
         self.tokenizer = self.pipeline.tokenizer
@@ -90,7 +91,7 @@ class Painter:
         if patch.sum() == 0:
             return self.latents_to_image()
         if self.noise_brush:
-            estimated_num_steps = (self.stroke_map * patch).sum() / patch.sum()
+            estimated_num_steps = (self.stroke_map * (patch / patch.sum())).sum()
             estimated_num_steps = 0 if torch.isnan(estimated_num_steps) else int(estimated_num_steps)
             estimated_num_steps = min(estimated_num_steps, len(self.scheduler.timesteps) - 1)
             t = self.scheduler.timesteps[estimated_num_steps]
@@ -100,12 +101,14 @@ class Painter:
 
             mask = patch[None, None, :, :]
             self.latents = mask * noisy_latents + (1 - mask) * self.latents
-            self.pred_latents = mask * noisy_latents + (1 - mask) * self.pred_latents
+            self.pred_latents = mask * self.pred_latents + (1 - mask) * self.pred_latents
 
             self.stroke_map = torch.clip(self.stroke_map - patch, 0, self.num_timesteps)
         else:
             patch[self.stroke_map > self.time_threshold * self.num_timesteps] = 0
-            estimated_num_steps = (self.stroke_map * patch).sum() / patch.sum()
+            if patch.sum() == 0:
+                return self.latents_to_image()
+            estimated_num_steps = (self.stroke_map * (patch / patch.sum())).sum()
             estimated_num_steps = 0 if torch.isnan(estimated_num_steps) else int(estimated_num_steps)
             estimated_num_steps = min(estimated_num_steps, len(self.scheduler.timesteps) - 1)
             t = self.scheduler.timesteps[estimated_num_steps]
